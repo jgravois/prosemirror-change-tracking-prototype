@@ -1,14 +1,17 @@
-const {ProseMirror} = require("prosemirror/src/edit")
-const {schema} = require("prosemirror/src/schema-basic")
-const {changeTracking} = require("./index")
+const {DOMParser} =require("prosemirror-model")
+const {EditorState} = require("prosemirror-state")
+const {EditorView} = require("prosemirror-view")
+const {schema} = require("prosemirror-schema-basic")
+const {changeTrackingPlugin} = require("./index")
 
-let pm = window.pm = new ProseMirror({
-  place: document.body,
-  doc: schema.parseDOM(document.querySelector("#content")),
-  plugins: [changeTracking.config({author: null})]
+let state = EditorState.create({
+  doc: DOMParser.fromSchema(schema).parse(document.querySelector("#content")),
+  schema,
+  plugins: [ changeTrackingPlugin() ] // changeTracking.config({author: "x"})]
 })
+let pm = window.pm = new EditorView(document.body, {state})
 
-let tracking = window.tracking = changeTracking.get(window.pm)
+let tracking = { changes: [] } // window.tracking = view.changeTracking.get(window.pm)
 
 const controls = document.body.appendChild(document.createElement("div"))
 
@@ -41,4 +44,4 @@ function updateControls() {
 }
 
 updateControls()
-pm.on.change.add(() => setTimeout(updateControls, 50))
+// pm.on.change.add(() => setTimeout(updateControls, 50))

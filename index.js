@@ -1,5 +1,5 @@
-const {Plugin} = require("prosemirror/src/edit")
-const {Transform} = require("prosemirror/src/transform")
+const {Plugin, PluginKey} = require("prosemirror-state")
+const {Transform} = require("prosemirror-transform")
 
 class TrackedChange {
   constructor(from, to, deleted, author) {
@@ -20,7 +20,6 @@ class TrackedChange {
     return this.deleted.content.textBetween(0, this.deleted.content.size, " ")
   }
 }
-exports.TrackedChange = TrackedChange
 
 function applyAndSlice(doc, changes, from, to) {
   let tr = new Transform(doc)
@@ -67,31 +66,25 @@ function mapChanges(changes, map, author, updated, docAfter) {
   return result
 }
 
-exports.changeTracking = new Plugin(class ChangeTracking {
+/**
+ * Create a plugin to keep track of page count.
+ * @param {object} config - plugin config
+ * @param {function} config.emit - event emitter
+ * @return {Plugin} page count plugin
+ */
+class ChangeTracking {
   constructor(pm, options) {
     this.pm = pm
     this.changes = options.changes.slice()
     this.annotations = []
     this.author = options.author
-    pm.on.transform.add(this.onTransform = this.onTransform.bind(this))
-  }
-
-  detach() {
-    this.pm.on.transform.remove(this.onTransform)
-  }
-
-  onTransform(transform, _, options) {
-    if (!this.author || options.reverting) // FIXME split changes when typing inside them?
-      this.changes = mapChanges(this.changes, transform)
-    else
-      this.record(transform, this.author)
-    this.updateAnnotations()
+    // pm.on.transform.add(this.onTransform = this.onTransform.bind(this))
   }
 
   record(transform, author) {
     let updated = []
     for (let i = 0; i < transform.steps.length; i++) {
-      let map = transform.maps[i]
+      let map = transform.mapping.maps[i]
       for (let r = 0; r < map.ranges.length; r += 3)
         this.recordRange(transform.docs[i], map.ranges[r], map.ranges[r] + map.ranges[r + 1], author, updated)
       this.changes = mapChanges(this.changes, map, author, updated, transform.docs[i + 1] || transform.doc)
@@ -176,10 +169,23 @@ exports.changeTracking = new Plugin(class ChangeTracking {
         addToHistory: false
       })
   }
-}, {
-  changes: [],
-  author: null
-})
+}
+
+function changeTrackingPlugin () {
+  let changeTracking
+  return new Plugin({
+    key: new PluginKey('CHANGE_TRACKING_PLUGIN'),
+    state: {
+      init (config, state) {
+        changeTracking = new ChangeTracking(state, { author: 'x', changes: [] })
+      },
+      apply (tr, oldState, newState) {
+        changeTracking.record(tr, changeTracking.author)
+        changeTracking.updateAnnotations()
+      }
+    }
+  })
+}
 
 function rangeOptionsFor(change, deletedText) {
   let options = {}
@@ -193,3 +199,5 @@ function rangeOptionsFor(change, deletedText) {
   }
   return options
 }
+
+module.exports = { TrackedChange, changeTrackingPlugin }

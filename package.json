@@ -6,7 +6,11 @@
     "demo": "moduleserve --port 8000 ."
   },
   "dependencies": {
-    "prosemirror": "~0.10.0"
+    "prosemirror-model": "^1.9.1",
+    "prosemirror-schema-basic": "^1.1.2",
+    "prosemirror-state": "^1.3.2",
+    "prosemirror-transform": "^1.2.3",
+    "prosemirror-view": "^1.14.2"
   },
   "devDependencies": {
     "moduleserve": "^0.8.0"

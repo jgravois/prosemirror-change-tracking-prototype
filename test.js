@@ -1,6 +1,7 @@
-const {ProseMirror} = require("prosemirror/src/edit")
-const {schema} = require("prosemirror/src/schema-basic")
-const {changeTracking} = require("./index")
+const {EditorState} = require("prosemirror-state")
+const {EditorView} = require("prosemirror-view")
+const {schema} = require("prosemirror-schema-basic")
+const {changeTrackingPlugin} = require("./index")
 
 let filter = document.location.hash.slice(1), failed = 0
 
@@ -8,10 +9,12 @@ function test(name, content, ...rest) {
   if (filter && name != filter) return
 
   let result = rest.pop()
-  let pm = new ProseMirror({
+  let state = EditorState.create({
     doc: schema.nodes.doc.create(null, content.split("\n").map(para => schema.nodes.paragraph.create(null, schema.text(para)))),
-    plugins: [changeTracking.config({author: "x"})]
+    plugins: [ changeTrackingPlugin() ]
   })
+  let pm = new EditorView(document.body, { state })
+
   rest.forEach(change => change(pm))
   let found = changeTracking.get(pm).changes.map(ch => ch.from + "-" + ch.to + "" + ch.deleted.content).join(" ")
   if (found != result) {
