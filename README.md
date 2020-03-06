@@ -19,7 +19,7 @@ an array of `TrackedChange` objects, and `author`, which can be used
 to initialize it with change tracking enabled.
 
 You can access its state with `changeTracking.get(editorInstance)`.
-The object that'll return has the following properties:
+The object that is returned has the following properties:
 
 **`changes`**`: [TrackedChange]`
 

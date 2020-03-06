@@ -139,8 +139,9 @@ class ChangeTracking {
         }
       }
       if (!matched) {
-        let ann = this.pm.markRange(change.from, change.to, rangeOptionsFor(change, deletedText))
-        this.annotations.splice(iA++, 0, ann)
+        // what is the modern alternative to markRange?
+        // let ann = this.pm.markRange(change.from, change.to, rangeOptionsFor(change, deletedText))
+        // this.annotations.splice(iA++, 0, ann)
       }
     }
     for (let i = iA; i < this.annotations.length; i++) {
@@ -179,9 +180,22 @@ function changeTrackingPlugin () {
       init (config, state) {
         changeTracking = new ChangeTracking(state, { author: 'x', changes: [] })
       },
-      apply (tr, oldState, newState) {
-        changeTracking.record(tr, changeTracking.author)
+      apply (transform, oldState, newState) {
+        // FIXME split changes when typing inside them?
+        if (!changeTracking.author /*|| options.reverting*/) {
+          changeTracking.changes = mapChanges(changeTracking.changes, transform)
+        }
+        else {
+          changeTracking.record(transform, changeTracking.author)
+        }
+        // still broken
         changeTracking.updateAnnotations()
+      },
+      props: {
+        changes (state) {
+          debugger
+          return changeTracking.changes
+        }
       }
     }
   })

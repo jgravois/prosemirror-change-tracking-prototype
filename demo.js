@@ -7,11 +7,19 @@ const {changeTrackingPlugin} = require("./index")
 let state = EditorState.create({
   doc: DOMParser.fromSchema(schema).parse(document.querySelector("#content")),
   schema,
-  plugins: [ changeTrackingPlugin() ] // changeTracking.config({author: "x"})]
+  plugins: [ changeTrackingPlugin() ]
 })
-let pm = window.pm = new EditorView(document.body, {state})
+let pm = window.pm = new EditorView(document.body, {
+  state,
+  dispatchTransaction(transaction) {
+    let newState = pm.state.apply(transaction)
+    pm.updateState(newState)
+    setTimeout(updateControls, 50)
+  }
+})
 
-let tracking = { changes: [] } // window.tracking = view.changeTracking.get(window.pm)
+// TODO: how to assign this to the plugins own array of changes??
+let tracking = window.tracking = { changes: [] }
 
 const controls = document.body.appendChild(document.createElement("div"))
 
@@ -44,4 +52,3 @@ function updateControls() {
 }
 
 updateControls()
-// pm.on.change.add(() => setTimeout(updateControls, 50))

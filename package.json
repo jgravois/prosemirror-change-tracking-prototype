@@ -1,5 +1,6 @@
 {
   "name": "nyt-track-changes",
+  "private": true,
   "version": "0.0.1",
   "description": "Change tracking in ProseMirror documents",
   "scripts": {
