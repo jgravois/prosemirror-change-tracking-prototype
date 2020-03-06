@@ -58,16 +58,6 @@ The author value associated with the change.
 The class' constructor takes these same values, `(from, to, deleted,
 author)`.
 
-## Caveats
-
- - This relies on a kludged-in ProseMirror feature for showing deleted
-   text inline. The package.json file points at a branch on github
-   that implements this, since it is not in any release.
-
- - Does not work with the collaborative editing plugin yet. Also, if
-   you use `setDoc` while using this plugin, you have to manually
-   reset the plugin as well.
-
 To run the demo (defined in `index.html` and `demo.js`), `npm install`
 this directory, start the demo server with `npm run demo`, and point
 an ECMAScript 6-capable browser at
