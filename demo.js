@@ -19,7 +19,7 @@ let pm = window.pm = new EditorView(document.body, {
 })
 
 // TODO: how to assign this to the plugins own array of changes??
-let tracking = window.tracking = { changes: [] }
+let tracking = window.tracking = pm.state.CHANGE_TRACKING_PLUGIN$
 
 const controls = document.body.appendChild(document.createElement("div"))
 
@@ -29,7 +29,8 @@ function updateControls() {
     let div = controls.appendChild(document.createElement("div"))
     div.className = "change"
     div.appendChild(document.createElement("strong")).appendChild(document.createTextNode(change.author))
-    let deleted = change.deletedText(), added = pm.doc.textBetween(change.from, change.to, " ")
+    let deleted = change.deletedText()
+    let added = pm.state.doc.textBetween(change.from, change.to, " ")
     let desc = deleted ? " deleted " + JSON.stringify(deleted) : ""
     if (added) desc += (desc ? " and" : "") + " added " + JSON.stringify(added)
     div.appendChild(document.createTextNode(desc))

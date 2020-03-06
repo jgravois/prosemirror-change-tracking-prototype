@@ -27,7 +27,7 @@ function applyAndSlice(doc, changes, from, to) {
     let change = changes[i]
     tr.replace(change.from, change.to, change.deleted)
   }
-  return tr.doc.slice(from, tr.map(to))
+  return tr.doc.slice(from, tr.mapping.map(to))
 }
 
 function minimizeChange(change, doc, side) {
@@ -66,19 +66,12 @@ function mapChanges(changes, map, author, updated, docAfter) {
   return result
 }
 
-/**
- * Create a plugin to keep track of page count.
- * @param {object} config - plugin config
- * @param {function} config.emit - event emitter
- * @return {Plugin} page count plugin
- */
 class ChangeTracking {
   constructor(pm, options) {
     this.pm = pm
     this.changes = options.changes.slice()
     this.annotations = []
     this.author = options.author
-    // pm.on.transform.add(this.onTransform = this.onTransform.bind(this))
   }
 
   record(transform, author) {
@@ -139,7 +132,7 @@ class ChangeTracking {
         }
       }
       if (!matched) {
-        // what is the modern alternative to markRange?
+        // not sure what the modern alternative to markRange is
         // let ann = this.pm.markRange(change.from, change.to, rangeOptionsFor(change, deletedText))
         // this.annotations.splice(iA++, 0, ann)
       }
@@ -179,6 +172,7 @@ function changeTrackingPlugin () {
     state: {
       init (config, state) {
         changeTracking = new ChangeTracking(state, { author: 'x', changes: [] })
+        return changeTracking
       },
       apply (transform, oldState, newState) {
         // FIXME split changes when typing inside them?
@@ -190,6 +184,7 @@ function changeTrackingPlugin () {
         }
         // still broken
         changeTracking.updateAnnotations()
+        return changeTracking
       },
       props: {
         changes (state) {

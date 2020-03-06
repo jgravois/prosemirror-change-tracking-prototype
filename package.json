@@ -14,6 +14,7 @@
     "prosemirror-view": "^1.14.2"
   },
   "devDependencies": {
-    "moduleserve": "^0.8.0"
+    "moduleserve": "^0.8.0",
+    "prosemirror-history": "^1.1.3"
   }
 }
