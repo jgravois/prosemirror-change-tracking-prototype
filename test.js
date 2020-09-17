@@ -1,6 +1,6 @@
 const {EditorState} = require("prosemirror-state")
 const {EditorView} = require("prosemirror-view")
-// const {history} = require("prosemirror-history")
+const {history, undo} = require("prosemirror-history")
 const {schema} = require("prosemirror-schema-basic")
 const {changeTrackingPlugin} = require("./index")
 
@@ -14,7 +14,8 @@ function test(name, content, ...rest) {
   let state = EditorState.create({
     doc: schema.nodes.doc.create(null, content.split("\n").map(para => schema.nodes.paragraph.create(null, schema.text(para)))),
     plugins: [
-      changeTrackingPlugin()
+      changeTrackingPlugin(),
+      history()
     ]
   })
   let pm = new EditorView(document.body, { state })
@@ -23,7 +24,7 @@ function test(name, content, ...rest) {
 
   let tracking = pm.state.CHANGE_TRACKING_PLUGIN$
 
-  // hack alert!
+  // such a hack
   if (INC > 0) {
     tracking = pm.state['CHANGE_TRACKING_PLUGIN$' + INC]
   }
@@ -35,6 +36,9 @@ function test(name, content, ...rest) {
   }
 
   INC += 1
+
+  // not sure if this is the right thing to do or not
+  delete state
   pm.destroy()
 }
 
@@ -44,19 +48,22 @@ function output(text) {
 
 function ins(at, text, end) {
   return pm => {
-     const transaction = pm.state.tr.replaceWith(at, end || at, pm.state.schema.text(text))
-     return pm.state.apply(transaction)
+    const transaction = pm.state.tr.replaceWith(at, end || at, pm.state.schema.text(text))
+    return pm.state.apply(transaction)
   }
 }
 
-// function undo(pm) {
-//   return pm.state.apply(history.undo())
+// function undoTest() {
+//   return pm => {
+//     const transaction = undo(pm.state, tr => pm.state = pm.state.apply(tr))
+//      return pm.state.apply(transaction)
+//   }
 // }
 
 function split(at) {
   return pm => {
-     const transaction = pm.state.tr.split(at)
-     return pm.state.apply(transaction)
+    const transaction = pm.state.tr.split(at)
+    return pm.state.apply(transaction)
   }
 }
 
@@ -83,9 +90,9 @@ test("simple_del", "foobar",
      del(2, 4),
      '2-2<"oo">')
 
-// test("del_adjacent", "foobar",
-//      del(2, 4), del(2, 4),
-//      '2-2<"ooba">')
+test("del_adjacent", "foobar",
+     del(2, 4), del(2, 4),
+     '2-2<"ooba">')
 
 test("add_del", "foobar",
      ins(4, "aa"), del(2, 4),
@@ -124,7 +131,7 @@ test("del_add_cancel_separate", "foo",
      "")
 
 // test("del_and_undo", "abcde",
-//      del(4, 5), del(3, 4), del(2, 3), undo,
+//      del(4, 5), del(3, 4), del(2, 3), undoTest,
 //      "")
 
 test("del_add_cancel_separate_matching_context", "fababab",

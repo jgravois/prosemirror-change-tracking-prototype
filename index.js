@@ -67,8 +67,8 @@ function mapChanges(changes, map, author, updated, docAfter) {
 }
 
 class ChangeTracking {
-  constructor(pm, options) {
-    this.pm = pm
+  constructor(state, options) {
+    this.state = state
     this.changes = options.changes.slice()
     this.annotations = []
     this.author = options.author
@@ -127,18 +127,18 @@ class ChangeTracking {
           iA++
           matched = true
         } else {
-          this.pm.removeRange(ann)
+          this.state.removeRange(ann)
           this.annotations.splice(iA, 1)
         }
       }
       if (!matched) {
         // not sure what the modern alternative to markRange is
-        // let ann = this.pm.markRange(change.from, change.to, rangeOptionsFor(change, deletedText))
+        // let ann = this.state.markRange(change.from, change.to, rangeOptionsFor(change, deletedText))
         // this.annotations.splice(iA++, 0, ann)
       }
     }
     for (let i = iA; i < this.annotations.length; i++) {
-      this.pm.removeRange(this.annotations[iA])
+      this.state.removeRange(this.annotations[iA])
     }
     this.annotations.length = iA
   }
@@ -156,12 +156,16 @@ class ChangeTracking {
   }
 
   revertChange(change) {
-    if (this.forgetChange(change))
-      this.pm.tr.replace(change.from, change.to, change.deleted).apply({
+    if (this.forgetChange(change)) {
+      const transaction = this.state.tr.replace(change.from, change.to, change.deleted)
+
+      // how to pass through config options to the plugins apply() handler?
+      this.state.apply(transaction, {
         scrollIntoView: true,
         reverting: true,
         addToHistory: false
       })
+    }
   }
 }
 
@@ -174,9 +178,9 @@ function changeTrackingPlugin () {
         changeTracking = new ChangeTracking(state, { author: 'x', changes: [] })
         return changeTracking
       },
-      apply (transform, oldState, newState) {
+      apply (transform, oldState, newState, options) {
         // FIXME split changes when typing inside them?
-        if (!changeTracking.author /*|| options.reverting*/) {
+        if (!changeTracking.author || options.reverting) {
           changeTracking.changes = mapChanges(changeTracking.changes, transform)
         }
         else {
