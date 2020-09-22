@@ -1,5 +1,6 @@
 const {Plugin, PluginKey} = require("prosemirror-state")
 const {Transform} = require("prosemirror-transform")
+const { Decoration, DecorationSet } = require('prosemirror-view')
 
 class TrackedChange {
   constructor(from, to, deleted, author) {
@@ -70,7 +71,7 @@ class ChangeTracking {
   constructor(state, options) {
     this.state = state
     this.changes = options.changes.slice()
-    this.annotations = []
+    this.decorations = DecorationSet.empty
     this.author = options.author
   }
 
@@ -113,34 +114,32 @@ class ChangeTracking {
     this.changes.splice(i, 0, new TrackedChange(from, to, doc.slice(from, to), author))
   }
 
-  updateAnnotations() {
-    // See if our document annotations still match the set of changes,
-    // and update them if they don't.
-    let iA = 0
-    for (let iC = 0; iC < this.changes.length; iC++) {
-      let change = this.changes[iC], matched = false
+  decorate() {
+    const decos = []
+
+    this.changes.forEach(change => {
       let deletedText = change.deletedText()
-      while (iA < this.annotations.length) {
-        let ann = this.annotations[iA]
-        if (ann.from > change.to) break
-        if (ann.from == change.from && ann.to == change.to && ann.options.deletedText == deletedText) {
-          iA++
-          matched = true
-        } else {
-          this.state.removeRange(ann)
-          this.annotations.splice(iA, 1)
+      if (deletedText) {
+        const dom = document.createElement('span')
+        dom.className = 'deleted'
+        dom.innerHTML = deletedText
+
+        const decoration = Decoration.widget(change.to, dom)
+        decos.push(decoration)
+      } else {
+        const attrs = {
+          class: 'inserted'
         }
+        const decoration = Decoration.inline(change.from, change.to, attrs)
+        decos.push(decoration)
       }
-      if (!matched) {
-        // not sure what the modern alternative to markRange is
-        // let ann = this.state.markRange(change.from, change.to, rangeOptionsFor(change, deletedText))
-        // this.annotations.splice(iA++, 0, ann)
-      }
+    })
+
+    if (decos.length) {
+      this.decorations = DecorationSet.create(this.state.doc, decos)
+    } else {
+      this.decorations = DecorationSet.empty
     }
-    for (let i = iA; i < this.annotations.length; i++) {
-      this.state.removeRange(this.annotations[iA])
-    }
-    this.annotations.length = iA
   }
 
   forgetChange(change) {
@@ -151,8 +150,9 @@ class ChangeTracking {
   }
 
   acceptChange(change) {
-    if (this.forgetChange(change))
-      this.updateAnnotations()
+    if (this.forgetChange(change)) {
+      this.decorate()
+    }
   }
 
   revertChange(change) {
@@ -186,31 +186,21 @@ function changeTrackingPlugin () {
         else {
           changeTracking.record(transform, changeTracking.author)
         }
-        // still broken
-        changeTracking.updateAnnotations()
+        changeTracking.decorate()
         return changeTracking
       },
       props: {
         changes (state) {
-          debugger
           return changeTracking.changes
         }
       }
+    },
+    props: {
+      decorations (state) {
+        return changeTracking.decorations
+      }
     }
   })
-}
-
-function rangeOptionsFor(change, deletedText) {
-  let options = {}
-  if (change.from == change.to) options.removeWhenEmpty = false
-  else options.className = "inserted"
-  if (deletedText) {
-    options.deletedText = deletedText
-    let elt = options.elementBefore = document.createElement("span")
-    elt.textContent = deletedText
-    elt.className = "deleted"
-  }
-  return options
 }
 
 module.exports = { TrackedChange, changeTrackingPlugin }
