@@ -2,6 +2,8 @@ const {Plugin, PluginKey} = require("prosemirror-state")
 const {Transform} = require("prosemirror-transform")
 const { Decoration, DecorationSet } = require('prosemirror-view')
 
+const changeTrackingKey = new PluginKey('CHANGE_TRACKING_PLUGIN')
+
 class TrackedChange {
   constructor(from, to, deleted, author) {
     this.from = from
@@ -172,7 +174,7 @@ class ChangeTracking {
 function changeTrackingPlugin () {
   let changeTracking
   return new Plugin({
-    key: new PluginKey('CHANGE_TRACKING_PLUGIN'),
+    key: changeTrackingKey,
     state: {
       init (config, state) {
         changeTracking = new ChangeTracking(state, { author: 'x', changes: [] })
@@ -203,4 +205,8 @@ function changeTrackingPlugin () {
   })
 }
 
-module.exports = { TrackedChange, changeTrackingPlugin }
+module.exports = {
+  TrackedChange,
+  changeTrackingPlugin,
+  changeTrackingKey
+}
