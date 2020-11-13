@@ -1,14 +1,25 @@
-const {ProseMirror} = require("prosemirror/src/edit")
-const {schema} = require("prosemirror/src/schema-basic")
-const {changeTracking} = require("./index")
+const {DOMParser} =require("prosemirror-model")
+const {EditorState} = require("prosemirror-state")
+const {EditorView} = require("prosemirror-view")
+const {schema} = require("prosemirror-schema-basic")
+const {changeTrackingPlugin} = require("./index")
 
-let pm = window.pm = new ProseMirror({
-  place: document.body,
-  doc: schema.parseDOM(document.querySelector("#content")),
-  plugins: [changeTracking.config({author: null})]
+let state = EditorState.create({
+  doc: DOMParser.fromSchema(schema).parse(document.querySelector("#content")),
+  schema,
+  plugins: [ changeTrackingPlugin() ]
+})
+let pm = window.pm = new EditorView(document.body, {
+  state,
+  dispatchTransaction(transaction) {
+    let newState = pm.state.apply(transaction)
+    pm.updateState(newState)
+    setTimeout(updateControls, 50)
+  }
 })
 
-let tracking = window.tracking = changeTracking.get(window.pm)
+// TODO: how to assign this to the plugins own array of changes??
+let tracking = window.tracking = pm.state.CHANGE_TRACKING_PLUGIN$
 
 const controls = document.body.appendChild(document.createElement("div"))
 
@@ -18,7 +29,8 @@ function updateControls() {
     let div = controls.appendChild(document.createElement("div"))
     div.className = "change"
     div.appendChild(document.createElement("strong")).appendChild(document.createTextNode(change.author))
-    let deleted = change.deletedText(), added = pm.doc.textBetween(change.from, change.to, " ")
+    let deleted = change.deletedText()
+    let added = pm.state.doc.textBetween(change.from, change.to, " ")
     let desc = deleted ? " deleted " + JSON.stringify(deleted) : ""
     if (added) desc += (desc ? " and" : "") + " added " + JSON.stringify(added)
     div.appendChild(document.createTextNode(desc))
@@ -41,4 +53,3 @@ function updateControls() {
 }
 
 updateControls()
-pm.on.change.add(() => setTimeout(updateControls, 50))

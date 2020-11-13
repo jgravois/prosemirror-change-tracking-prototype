@@ -1,5 +1,8 @@
-const {Plugin} = require("prosemirror/src/edit")
-const {Transform} = require("prosemirror/src/transform")
+const {Plugin, PluginKey} = require("prosemirror-state")
+const {Transform} = require("prosemirror-transform")
+const { Decoration, DecorationSet } = require('prosemirror-view')
+
+const changeTrackingKey = new PluginKey('CHANGE_TRACKING_PLUGIN')
 
 class TrackedChange {
   constructor(from, to, deleted, author) {
@@ -20,7 +23,6 @@ class TrackedChange {
     return this.deleted.content.textBetween(0, this.deleted.content.size, " ")
   }
 }
-exports.TrackedChange = TrackedChange
 
 function applyAndSlice(doc, changes, from, to) {
   let tr = new Transform(doc)
@@ -28,7 +30,7 @@ function applyAndSlice(doc, changes, from, to) {
     let change = changes[i]
     tr.replace(change.from, change.to, change.deleted)
   }
-  return tr.doc.slice(from, tr.map(to))
+  return tr.doc.slice(from, tr.mapping.map(to))
 }
 
 function minimizeChange(change, doc, side) {
@@ -67,31 +69,18 @@ function mapChanges(changes, map, author, updated, docAfter) {
   return result
 }
 
-exports.changeTracking = new Plugin(class ChangeTracking {
-  constructor(pm, options) {
-    this.pm = pm
+class ChangeTracking {
+  constructor(state, options) {
+    this.state = state
     this.changes = options.changes.slice()
-    this.annotations = []
+    this.decorations = DecorationSet.empty
     this.author = options.author
-    pm.on.transform.add(this.onTransform = this.onTransform.bind(this))
-  }
-
-  detach() {
-    this.pm.on.transform.remove(this.onTransform)
-  }
-
-  onTransform(transform, _, options) {
-    if (!this.author || options.reverting) // FIXME split changes when typing inside them?
-      this.changes = mapChanges(this.changes, transform)
-    else
-      this.record(transform, this.author)
-    this.updateAnnotations()
   }
 
   record(transform, author) {
     let updated = []
     for (let i = 0; i < transform.steps.length; i++) {
-      let map = transform.maps[i]
+      let map = transform.mapping.maps[i]
       for (let r = 0; r < map.ranges.length; r += 3)
         this.recordRange(transform.docs[i], map.ranges[r], map.ranges[r] + map.ranges[r + 1], author, updated)
       this.changes = mapChanges(this.changes, map, author, updated, transform.docs[i + 1] || transform.doc)
@@ -127,33 +116,32 @@ exports.changeTracking = new Plugin(class ChangeTracking {
     this.changes.splice(i, 0, new TrackedChange(from, to, doc.slice(from, to), author))
   }
 
-  updateAnnotations() {
-    // See if our document annotations still match the set of changes,
-    // and update them if they don't.
-    let iA = 0
-    for (let iC = 0; iC < this.changes.length; iC++) {
-      let change = this.changes[iC], matched = false
+  decorate() {
+    const decos = []
+
+    this.changes.forEach(change => {
       let deletedText = change.deletedText()
-      while (iA < this.annotations.length) {
-        let ann = this.annotations[iA]
-        if (ann.from > change.to) break
-        if (ann.from == change.from && ann.to == change.to && ann.options.deletedText == deletedText) {
-          iA++
-          matched = true
-        } else {
-          this.pm.removeRange(ann)
-          this.annotations.splice(iA, 1)
+      if (deletedText) {
+        const dom = document.createElement('span')
+        dom.className = 'deleted'
+        dom.innerHTML = deletedText
+
+        const decoration = Decoration.widget(change.to, dom)
+        decos.push(decoration)
+      } else {
+        const attrs = {
+          class: 'inserted'
         }
+        const decoration = Decoration.inline(change.from, change.to, attrs)
+        decos.push(decoration)
       }
-      if (!matched) {
-        let ann = this.pm.markRange(change.from, change.to, rangeOptionsFor(change, deletedText))
-        this.annotations.splice(iA++, 0, ann)
-      }
+    })
+
+    if (decos.length) {
+      this.decorations = DecorationSet.create(this.state.doc, decos)
+    } else {
+      this.decorations = DecorationSet.empty
     }
-    for (let i = iA; i < this.annotations.length; i++) {
-      this.pm.removeRange(this.annotations[iA])
-    }
-    this.annotations.length = iA
   }
 
   forgetChange(change) {
@@ -164,32 +152,61 @@ exports.changeTracking = new Plugin(class ChangeTracking {
   }
 
   acceptChange(change) {
-    if (this.forgetChange(change))
-      this.updateAnnotations()
+    if (this.forgetChange(change)) {
+      this.decorate()
+    }
   }
 
   revertChange(change) {
-    if (this.forgetChange(change))
-      this.pm.tr.replace(change.from, change.to, change.deleted).apply({
+    if (this.forgetChange(change)) {
+      const transaction = this.state.tr.replace(change.from, change.to, change.deleted)
+
+      // how to pass through config options to the plugins apply() handler?
+      this.state.apply(transaction, {
         scrollIntoView: true,
         reverting: true,
         addToHistory: false
       })
+    }
   }
-}, {
-  changes: [],
-  author: null
-})
+}
 
-function rangeOptionsFor(change, deletedText) {
-  let options = {}
-  if (change.from == change.to) options.removeWhenEmpty = false
-  else options.className = "inserted"
-  if (deletedText) {
-    options.deletedText = deletedText
-    let elt = options.elementBefore = document.createElement("span")
-    elt.textContent = deletedText
-    elt.className = "deleted"
-  }
-  return options
+function changeTrackingPlugin () {
+  let changeTracking
+  return new Plugin({
+    key: changeTrackingKey,
+    state: {
+      init (config, state) {
+        changeTracking = new ChangeTracking(state, { author: 'x', changes: [] })
+        return changeTracking
+      },
+      apply (transform, oldState, newState, options) {
+        // FIXME split changes when typing inside them?
+        if (!changeTracking.author || options.reverting) {
+          changeTracking.changes = mapChanges(changeTracking.changes, transform)
+        }
+        else {
+          changeTracking.record(transform, changeTracking.author)
+        }
+        changeTracking.decorate()
+        return changeTracking
+      },
+      props: {
+        changes (state) {
+          return changeTracking.changes
+        }
+      }
+    },
+    props: {
+      decorations (state) {
+        return changeTracking.decorations
+      }
+    }
+  })
+}
+
+module.exports = {
+  TrackedChange,
+  changeTrackingPlugin,
+  changeTrackingKey
 }
